@@ -7,10 +7,15 @@ import io.github.zapproject.jzap.InitCurve;
 import io.github.zapproject.jzap.InitProvider;
 import io.github.zapproject.jzap.NetworkProviderOptions;
 import io.github.zapproject.jzap.Provider;
+import io.github.zapproject.jzap.SetProviderParams;
 import io.github.zapproject.jzap.SetProviderTitle;
 import io.github.zapproject.jzap.ZapToken;
+import io.ipfs.api.IPFS;
+import io.ipfs.api.MerkleNode;
+import io.ipfs.api.NamedStreamable;
 import java.io.File;
 import java.math.BigInteger;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +29,6 @@ import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
 
 
-
 public class Oracle {
     public Provider oracle;
     public ZapToken token;
@@ -32,6 +36,9 @@ public class Oracle {
     public Credentials creds;
     public ContractGasProvider gasPro;
     public HashMap<String, Object> map;
+    
+    private IPFS ipfs = new IPFS("https://ipfs.infura.io", 5001);
+    private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
 
     public Oracle() throws Exception {
         map = new HashMap<String, Object>();
@@ -49,7 +56,7 @@ public class Oracle {
         assert map.get("public_key")!=null : "public_key is required to run Oracle";
         assert endpoint.get("name")!=null : "Endpoint's name is required";
         assert endpoint.get("curve")!=null : "Curve is required for endpoint";
-        assert endpoint.get("queryList")!=null : "Query list is recommende for date offer";
+        assert endpoint.get("queryList")!=null : "Query list is recommended for date offer";
     }
 
     @SuppressWarnings("unchecked")
@@ -111,8 +118,27 @@ public class Oracle {
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
 
+            Map<String, Object> mapJson = new HashMap<>();
+            map.put("name", endpointSchema.get("name"));
+            map.put("curve", endpointSchema.get("curve"));
+            map.put("broker", endpointSchema.get("broker"));
+            map.put("params", endpointParams);
 
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.writeValue(Paths.get("endpointSchema.json").toFile(), map);
+            System.out.println("Saving endpoint info into ipfs");
+            NamedStreamable.FileWrapper file = new NamedStreamable.FileWrapper(new File("endpointSchema.json"));
+            List<MerkleNode> node = ipfs.add(file);
+
+            SetProviderParams setParams = new SetProviderParams();
+            setParams.key = ( (String) endpointSchema.get("name")).getBytes();
+            setParams.value = (IPFS_GATEWAY + node.get(0).hash).getBytes();
+            oracle.setProviderParameter(setParams);
+        } else {
+            System.out.println("curve is already set");
         }
+
+        
     }
 
     public void getProvider() throws Exception {

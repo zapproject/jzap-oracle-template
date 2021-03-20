@@ -16,6 +16,14 @@
 	<properties>
 		<java.version>11</java.version>
 	</properties>
+
+	<repositories>
+		<repository>
+			<id>jitpack.io</id>
+			<url>https://jitpack.io</url>
+		</repository>
+	</repositories>
+	
 	<dependencies> 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -27,33 +35,35 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.web3j</groupId>
 			<artifactId>core</artifactId>
 			<version>4.8.1</version>
 		</dependency>
+
 		<dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-		<!-- <dependency>
+
+		<dependency>
 			<groupId>io.github.zapproject</groupId>
 			<artifactId>jzap</artifactId>
-			<version>0.0.58</version>
-		</dependency> -->
-		<dependency>
+			<version>0.0.59</version>
+		</dependency>
+		<!-- <dependency>
 			<groupId>io.github.zapproject</groupId>
 			<artifactId>jzap</artifactId>
 			<version>0.0.6</version>
 			<scope>system</scope>
 			<systemPath>${project.basedir}/dependencies/jzap-0.0.6.jar</systemPath>
-		</dependency>
+		</dependency> -->
 		<dependency>
 			<groupId>io.socket</groupId>
 			<artifactId>socket.io-client</artifactId>
 			<version>2.0.0</version>
 		</dependency>
-
 
 		<dependency>
 			<groupId>com.litesoftwares</groupId>
@@ -68,6 +78,13 @@
 			<artifactId>jackson-databind</artifactId>
 			<version>2.12.2</version>
 		</dependency>
+
+		<dependency>
+			<groupId>com.github.ipfs</groupId>
+			<artifactId>java-ipfs-http-client</artifactId>
+			<version>v1.3.3</version>
+		</dependency>
+
 	</dependencies>
 	
 	<build>
