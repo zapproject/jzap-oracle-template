@@ -2,11 +2,13 @@ package io.github.oracle.template.jzap;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.zapproject.jzap.Dispatch;
 import io.github.zapproject.jzap.EndpointParams;
 import io.github.zapproject.jzap.InitCurve;
 import io.github.zapproject.jzap.InitProvider;
 import io.github.zapproject.jzap.NetworkProviderOptions;
 import io.github.zapproject.jzap.Provider;
+import io.github.zapproject.jzap.ResponseArgs;
 import io.github.zapproject.jzap.SetProviderParams;
 import io.github.zapproject.jzap.SetProviderTitle;
 import io.github.zapproject.jzap.ZapToken;
@@ -15,13 +17,16 @@ import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
 import java.io.File;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.EthAccounts;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
@@ -36,6 +41,7 @@ public class Oracle {
     public Credentials creds;
     public ContractGasProvider gasPro;
     public HashMap<String, Object> map;
+    public Responder responder;
     
     private IPFS ipfs = new IPFS("https://ipfs.infura.io", 5001);
     private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
@@ -48,6 +54,7 @@ public class Oracle {
         this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
         this.creds = Credentials.create((String)map.get("account"));
         this.gasPro = new DefaultGasProvider();
+        this.responder = new Responder();
     }
 
     public void validateConfig() {
@@ -138,7 +145,15 @@ public class Oracle {
             System.out.println("curve is already set");
         }
 
-        
+        while (true) {
+            try { oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
+                    DefaultBlockParameterName.LATEST).subscribe(tx -> {
+                        handleQuery(tx);
+                    });
+            } catch (NullPointerException ne) {
+
+            }
+        }        
     }
 
     public void getProvider() throws Exception {
@@ -153,7 +168,42 @@ public class Oracle {
         token = ZapToken.load(options);
     }
 
-    public void handleQuery(TransactionReceipt txReceipt) {
-        
+    public void handleQuery(Dispatch.IncomingEventResponse event) {
+        if (Arrays.equals(event.endpoint, ((String) map.get("name")).getBytes())) {
+            System.out.println("Unable to find the callback for " + event.endpoint);
+            return;
+        }
+
+        String endpointParams = "";
+        List<String> params = new ArrayList<String>();
+
+        for (byte[] param : event.endpointParams) {
+            params.add(new String(param, StandardCharsets.UTF_8));
+            endpointParams += params.get(params.size()-1);
+        }
+
+        System.out.println("Received query to " + event.endpoint + " from " + 
+        event.onchainSubscriber + " at address " + event.subscriber);
+
+        System.out.println("Query ID " + event.id + "...: " + event.query + 
+                ". Parameters: " + event.endpointParams);
+
+        for (Map<String, Object> query : (List<Map<String, Object>>) map.get("queryList")) {
+            try {
+                String response = responder.getResponse(event.query, endpointParams, 7);
+                System.out.println("got response from getResponse method : " + response);
+
+                System.out.println("Responding to offchain subscriber");
+                ResponseArgs args = new ResponseArgs();
+                args.queryID = event.id;
+                args.responseParams = params;
+                args.dynamic = (Boolean)query.get("dynamic");
+                TransactionReceipt tx = oracle.respond(args);
+
+                System.out.println("Responded to " + event.subscriber + " in transaction " + tx.getTransactionHash());
+            } catch (Exception e) {
+                throw new Error("Error Responding to query " + event.id + " : " + e.getMessage());
+            }
+        }
     }
 }

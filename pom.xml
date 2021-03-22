@@ -35,7 +35,7 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		
+
 		<dependency>
 			<groupId>org.web3j</groupId>
 			<artifactId>core</artifactId>
@@ -47,18 +47,18 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-		<dependency>
+		<!-- <dependency>
 			<groupId>io.github.zapproject</groupId>
 			<artifactId>jzap</artifactId>
 			<version>0.0.59</version>
-		</dependency>
-		<!-- <dependency>
+		</dependency> -->
+		<dependency>
 			<groupId>io.github.zapproject</groupId>
 			<artifactId>jzap</artifactId>
 			<version>0.0.6</version>
 			<scope>system</scope>
 			<systemPath>${project.basedir}/dependencies/jzap-0.0.6.jar</systemPath>
-		</dependency> -->
+		</dependency>
 		<dependency>
 			<groupId>io.socket</groupId>
 			<artifactId>socket.io-client</artifactId>
