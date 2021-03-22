@@ -12,7 +12,7 @@ public class Responder {
         client = new CoinGeckoApiClientImpl();
     }
 
-    public String getResposne(String coin, String currency, Integer days) {
+    public String getResponse(String coin, String currency, Integer days) {
         MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
         String price = data.prices.get(data.prices.size()-1).get(1);
         return price;

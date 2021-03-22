@@ -13,9 +13,6 @@ import org.web3j.protocol.core.methods.response.EthAccounts;
 import org.web3j.protocol.core.methods.response.EthSign;
 
 
-
-
-
 @RestController
 public class Status {
 
@@ -56,7 +53,6 @@ public class Status {
                     e.printStackTrace();
                 }
             }
-
         });
 
         socket.on("authenticated", new Emitter.Listener() {
