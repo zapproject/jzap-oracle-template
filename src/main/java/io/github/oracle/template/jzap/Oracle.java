@@ -26,8 +26,6 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
-import org.web3j.protocol.core.DefaultBlockParameterName;
-import org.web3j.protocol.core.methods.response.EthAccounts;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
@@ -43,18 +41,24 @@ public class Oracle {
     public HashMap<String, Object> map;
     public Responder responder;
     
-    private IPFS ipfs = new IPFS("https://ipfs.infura.io", 5001);
+    private IPFS ipfs;
     private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
 
     public Oracle() throws Exception {
-        map = new HashMap<String, Object>();
+        String dir = new File("").getAbsolutePath();
         ObjectMapper mapper = new ObjectMapper();
-        map = (HashMap<String, Object>) mapper.readValue(new File("./Config.json"), new TypeReference<Map<String, Object>>(){});
-
-        this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
+        map = (HashMap<String, Object>) mapper.readValue(new File(
+                dir + "/src/main/java/io/github/oracle/template/jzap/Config.json"), 
+                new TypeReference<Map<String, Object>>(){});
+        
+        if (((String)map.get("NODE_URL")).isEmpty())
+            this.web3j = Web3j.build(new HttpService());
+        else
+            this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
         this.creds = Credentials.create((String)map.get("account"));
         this.gasPro = new DefaultGasProvider();
         this.responder = new Responder();
+        this.ipfs = new IPFS("/dnsaddr/ipfs.infura.io/tcp/5001/https");
     }
 
     public void validateConfig() {
@@ -70,7 +74,7 @@ public class Oracle {
     public void initialize() throws Exception {
         validateConfig();
         getProvider();
-        Thread.sleep(5000);
+        // Thread.sleep(5);
         byte[] title = oracle.getTitle();
         if (title.length == 0) {
             System.out.println("No provider found, Initializing provider");
@@ -83,13 +87,17 @@ public class Oracle {
             if (title != map.get("title")) {
                 System.out.println("Changing title");
                 SetProviderTitle arg = new SetProviderTitle();
-                arg.title = ((String) map.get("title")).getBytes();
+                title = new byte[32];
+                System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
+                arg.title = title;
                 TransactionReceipt ret = oracle.setTitle(arg);
             }
         }
 
         HashMap<String, Object> endpointSchema = (HashMap<String, Object>) map.get("EndpointSchema");
-        boolean curveSet = oracle.isEndpointCreated(((String)endpointSchema.get("name")).getBytes());
+        title = new byte[32];
+        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
+        boolean curveSet = oracle.isEndpointCreated(title);
 
         if (!curveSet) {
             System.out.println("No matching Endpoint found, creating endpoint");
@@ -130,7 +138,7 @@ public class Oracle {
             map.put("curve", endpointSchema.get("curve"));
             map.put("broker", endpointSchema.get("broker"));
             map.put("params", endpointParams);
-
+            System.out.println("############");
             ObjectMapper mapper = new ObjectMapper();
             mapper.writeValue(Paths.get("endpointSchema.json").toFile(), map);
             System.out.println("Saving endpoint info into ipfs");
@@ -145,22 +153,22 @@ public class Oracle {
             System.out.println("curve is already set");
         }
 
-        while (true) {
-            try { oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
-                    DefaultBlockParameterName.LATEST).subscribe(tx -> {
-                        handleQuery(tx);
-                    });
-            } catch (NullPointerException ne) {
+        // while (true) {
+        //     try { oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
+        //             DefaultBlockParameterName.LATEST).subscribe(tx -> {
+        //                 handleQuery(tx);
+        //             });
+        //     } catch (NullPointerException ne) {
 
-            }
-        }        
+        //     }
+        // }        
     }
 
     public void getProvider() throws Exception {
-        EthAccounts accounts = web3j.ethAccounts().send();
-        assert accounts.getAccounts().size() != 0 : "Unable to find an account in the current web3j provider, check your config variables";
-        String owner = accounts.getAccounts().get(0);
-        Credentials creds = Credentials.create(owner);
+        // EthAccounts accounts = web3j.ethAccounts().send();
+        // assert accounts.getAccounts().size() != 0 : "Unable to find an account in the current web3j provider, check your config variables";
+        // String owner = accounts.getAccounts().get(0);
+        // Credentials creds = Credentials.create(owner);
         ContractGasProvider gasPro = new DefaultGasProvider();
         NetworkProviderOptions options = new NetworkProviderOptions(31337, web3j, creds, gasPro);
         oracle = new Provider(options);

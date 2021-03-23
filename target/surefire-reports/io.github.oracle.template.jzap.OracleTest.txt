@@ -1,0 +1,8 @@
+-------------------------------------------------------------------------------
+Test set: io.github.oracle.template.jzap.OracleTest
+-------------------------------------------------------------------------------
+Tests run: 2, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 1.658 s <<< FAILURE! - in io.github.oracle.template.jzap.OracleTest
+InitializeTest  Time elapsed: 0.836 s  <<< ERROR!
+java.lang.NullPointerException
+	at io.github.oracle.template.jzap.OracleTest.InitializeTest(OracleTest.java:29)
+
