@@ -1,10 +1,10 @@
 {
-    "title": "Coingecko Oracle",
+    "title": "FunTranslations Oracle",
     "public_key": 100,
     "NODE_URL": "",
     "account": "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
     "EndpointSchema": {
-        "name": "Zap Price",
+        "name": "Hodor",
         "curve": [
             2,
             1,
@@ -15,10 +15,8 @@
         "md": "generic price oracle",
         "queryList": [
             {
-                "query": "zap", 
-                "params": ["int"],
-                "dynamic": false,
-                "responseType": "string"
+                "query": "hodor", 
+                "text": "hold the door"
             }
         ]
     }

@@ -1,27 +1,28 @@
 package io.github.oracle.template.jzap;
 
-import com.litesoftwares.coingecko.CoinGeckoApiClient;
-import com.litesoftwares.coingecko.domain.Coins.MarketChart;
-import com.litesoftwares.coingecko.impl.CoinGeckoApiClientImpl;
-
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class Responder {
-    public CoinGeckoApiClient client;
 
     public Responder() {
-        client = new CoinGeckoApiClientImpl();
     }
 
-    public String getResponse(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        return price;
-    }
-
-    public int getResponseInt(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        int ret = Integer.parseInt(price);
-        return ret;
+    public String getResponse(String to, String from) throws Exception {
+        String text = from.replace(" ", "%20");
+        OkHttpClient httpClient = new OkHttpClient();
+        RequestBody formBody = new FormBody.Builder()
+                .add("text", text).build();
+        Request request = new Request.Builder()
+                .url("https://api.funtranslations.com/translate/"+to+".json")
+                .post(formBody)
+                .build();
+        
+        Response response = httpClient.newCall(request).execute();
+        System.out.println("#####" + response.body().string());
+        return response.body().string();
     }
 }
