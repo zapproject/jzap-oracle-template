@@ -16,6 +16,7 @@ import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
 import java.io.File;
+import java.lang.Integer;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
@@ -27,7 +28,6 @@ import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
-import org.web3j.protocol.core.methods.response.EthAccounts;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
@@ -43,18 +43,24 @@ public class Oracle {
     public HashMap<String, Object> map;
     public Responder responder;
     
-    private IPFS ipfs = new IPFS("https://ipfs.infura.io", 5001);
+    private IPFS ipfs;
     private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
 
     public Oracle() throws Exception {
-        map = new HashMap<String, Object>();
+        String dir = new File("").getAbsolutePath();
         ObjectMapper mapper = new ObjectMapper();
-        map = (HashMap<String, Object>) mapper.readValue(new File("./Config.json"), new TypeReference<Map<String, Object>>(){});
-
-        this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
+        map = (HashMap<String, Object>) mapper.readValue(new File(
+                dir + "/src/main/java/io/github/oracle/template/jzap/Config.json"), 
+                new TypeReference<Map<String, Object>>(){});
+        
+        if (((String)map.get("NODE_URL")).isEmpty())
+            this.web3j = Web3j.build(new HttpService());
+        else
+            this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
         this.creds = Credentials.create((String)map.get("account"));
         this.gasPro = new DefaultGasProvider();
         this.responder = new Responder();
+        this.ipfs = new IPFS("/dnsaddr/ipfs.infura.io/tcp/5001/https");
     }
 
     public void validateConfig() {
@@ -70,7 +76,7 @@ public class Oracle {
     public void initialize() throws Exception {
         validateConfig();
         getProvider();
-        Thread.sleep(5000);
+        // Thread.sleep(5);
         byte[] title = oracle.getTitle();
         if (title.length == 0) {
             System.out.println("No provider found, Initializing provider");
@@ -83,25 +89,36 @@ public class Oracle {
             if (title != map.get("title")) {
                 System.out.println("Changing title");
                 SetProviderTitle arg = new SetProviderTitle();
-                arg.title = ((String) map.get("title")).getBytes();
+                title = new byte[32];
+                System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
+                arg.title = title;
                 TransactionReceipt ret = oracle.setTitle(arg);
             }
         }
 
         HashMap<String, Object> endpointSchema = (HashMap<String, Object>) map.get("EndpointSchema");
-        boolean curveSet = oracle.isEndpointCreated(((String)endpointSchema.get("name")).getBytes());
+        title = new byte[32];
+        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
+        boolean curveSet = oracle.isEndpointCreated(title);
 
-        if (!curveSet) {
+        if (curveSet) {
             System.out.println("No matching Endpoint found, creating endpoint");
             
             if ((String)endpointSchema.get("broker") == "") {
                 endpointSchema.put("broker", "0x0000000000000000000000000000000000000000");
             }
 
+            // title = new byte[32];
+            // System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
             InitCurve init = new InitCurve();
             init.broker = (String)endpointSchema.get("broker");
-            init.endpoint = ((String)endpointSchema.get("name")).getBytes();
-            init.term = (List<BigInteger>)endpointSchema.get("curve");
+            init.endpoint = title;
+            init.term = new ArrayList<BigInteger>();
+    
+            for (Integer point : (List<Integer>) endpointSchema.get("curve")) {
+                init.term.add(BigInteger.valueOf(point));
+            }
+            
             TransactionReceipt createEndpoint = oracle.initiateProviderCurve(init);
             System.out.println("Successfully created endpoint");
 
@@ -116,12 +133,22 @@ public class Oracle {
                 for (String param : queryParams) {
                     params+=param;
                 }
-                endpointParams.add(("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes());
+                
+                byte[] temp = ("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes();
+                byte[] param = new byte[32];
+                if (temp.length > 32)
+                    System.arraycopy(temp, 0, param, 0, 32);
+                else
+                    System.arraycopy(temp, 0, param, 0, temp.length);
+
+                endpointParams.add(param);
             }
+
             System.out.println("Setting endpoint params");
 
             EndpointParams params = new EndpointParams();
-            params.endpoint = ((String) map.get("name")).getBytes();
+            // params.endpoint = ((String) map.get("name")).getBytes();
+            params.endpoint = title;
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
 
@@ -138,15 +165,25 @@ public class Oracle {
             List<MerkleNode> node = ipfs.add(file);
 
             SetProviderParams setParams = new SetProviderParams();
-            setParams.key = ( (String) endpointSchema.get("name")).getBytes();
-            setParams.value = (IPFS_GATEWAY + node.get(0).hash).getBytes();
+            setParams.key = new byte[32];
+            if (((String) endpointSchema.get("name")).getBytes().length > 32)
+                System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, 32);
+            else
+                System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, ( (String) endpointSchema.get("name")).getBytes().length);
+            setParams.value = new byte[32];
+            if ((IPFS_GATEWAY + node.get(0).hash).getBytes().length > 32 )
+                System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, 32);
+            else
+                System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, (IPFS_GATEWAY + node.get(0).hash).getBytes().length);
+
             oracle.setProviderParameter(setParams);
         } else {
             System.out.println("curve is already set");
         }
 
         while (true) {
-            try { oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
+            try { 
+                oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
                     DefaultBlockParameterName.LATEST).subscribe(tx -> {
                         handleQuery(tx);
                     });
@@ -157,10 +194,10 @@ public class Oracle {
     }
 
     public void getProvider() throws Exception {
-        EthAccounts accounts = web3j.ethAccounts().send();
-        assert accounts.getAccounts().size() != 0 : "Unable to find an account in the current web3j provider, check your config variables";
-        String owner = accounts.getAccounts().get(0);
-        Credentials creds = Credentials.create(owner);
+        // EthAccounts accounts = web3j.ethAccounts().send();
+        // assert accounts.getAccounts().size() != 0 : "Unable to find an account in the current web3j provider, check your config variables";
+        // String owner = accounts.getAccounts().get(0);
+        // Credentials creds = Credentials.create(owner);
         ContractGasProvider gasPro = new DefaultGasProvider();
         NetworkProviderOptions options = new NetworkProviderOptions(31337, web3j, creds, gasPro);
         oracle = new Provider(options);
@@ -168,6 +205,7 @@ public class Oracle {
         token = ZapToken.load(options);
     }
 
+    @SuppressWarnings("unchecked")
     public void handleQuery(Dispatch.IncomingEventResponse event) {
         if (Arrays.equals(event.endpoint, ((String) map.get("name")).getBytes())) {
             System.out.println("Unable to find the callback for " + event.endpoint);

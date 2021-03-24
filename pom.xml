@@ -80,11 +80,39 @@
 		</dependency>
 
 		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+			<version>2.12.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+			<version>2.12.2</version>
+			</dependency>
+
+		<dependency>
 			<groupId>com.github.ipfs</groupId>
 			<artifactId>java-ipfs-http-client</artifactId>
 			<version>v1.3.3</version>
 		</dependency>
 
+		<dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>retrofit</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>converter-jackson</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+
+		<dependency>
+    		<groupId>com.squareup.okhttp3</groupId>
+    		<artifactId>okhttp</artifactId>
+    		<version>4.9.1</version>
+		</dependency>
 	</dependencies>
 	
 	<build>
