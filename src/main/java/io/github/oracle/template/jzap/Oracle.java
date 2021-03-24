@@ -228,7 +228,7 @@ public class Oracle {
 
         for (Map<String, Object> query : (List<Map<String, Object>>) map.get("queryList")) {
             try {
-                String response = responder.getResponse(event.query, endpointParams, 7);
+                String response = responder.getResponse(event.query, endpointParams);
                 System.out.println("got response from getResponse method : " + response);
 
                 System.out.println("Responding to offchain subscriber");
