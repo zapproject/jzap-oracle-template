@@ -16,6 +16,7 @@ import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
 import java.io.File;
+import java.lang.Integer;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
@@ -99,17 +101,24 @@ public class Oracle {
         System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
         boolean curveSet = oracle.isEndpointCreated(title);
 
-        if (!curveSet) {
+        if (curveSet) {
             System.out.println("No matching Endpoint found, creating endpoint");
             
             if ((String)endpointSchema.get("broker") == "") {
                 endpointSchema.put("broker", "0x0000000000000000000000000000000000000000");
             }
 
+            // title = new byte[32];
+            // System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
             InitCurve init = new InitCurve();
             init.broker = (String)endpointSchema.get("broker");
-            init.endpoint = ((String)endpointSchema.get("name")).getBytes();
-            init.term = (List<BigInteger>)endpointSchema.get("curve");
+            init.endpoint = title;
+            init.term = new ArrayList<BigInteger>();
+    
+            for (Integer point : (List<Integer>) endpointSchema.get("curve")) {
+                init.term.add(BigInteger.valueOf(point));
+            }
+            
             TransactionReceipt createEndpoint = oracle.initiateProviderCurve(init);
             System.out.println("Successfully created endpoint");
 
@@ -124,12 +133,22 @@ public class Oracle {
                 for (String param : queryParams) {
                     params+=param;
                 }
-                endpointParams.add(("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes());
+                
+                byte[] temp = ("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes();
+                byte[] param = new byte[32];
+                if (temp.length > 32)
+                    System.arraycopy(temp, 0, param, 0, 32);
+                else
+                    System.arraycopy(temp, 0, param, 0, temp.length);
+
+                endpointParams.add(param);
             }
+
             System.out.println("Setting endpoint params");
 
             EndpointParams params = new EndpointParams();
-            params.endpoint = ((String) map.get("name")).getBytes();
+            // params.endpoint = ((String) map.get("name")).getBytes();
+            params.endpoint = title;
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
 
@@ -138,7 +157,7 @@ public class Oracle {
             map.put("curve", endpointSchema.get("curve"));
             map.put("broker", endpointSchema.get("broker"));
             map.put("params", endpointParams);
-            System.out.println("############");
+
             ObjectMapper mapper = new ObjectMapper();
             mapper.writeValue(Paths.get("endpointSchema.json").toFile(), map);
             System.out.println("Saving endpoint info into ipfs");
@@ -146,22 +165,32 @@ public class Oracle {
             List<MerkleNode> node = ipfs.add(file);
 
             SetProviderParams setParams = new SetProviderParams();
-            setParams.key = ( (String) endpointSchema.get("name")).getBytes();
-            setParams.value = (IPFS_GATEWAY + node.get(0).hash).getBytes();
+            setParams.key = new byte[32];
+            if (((String) endpointSchema.get("name")).getBytes().length > 32)
+                System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, 32);
+            else
+                System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, ( (String) endpointSchema.get("name")).getBytes().length);
+            setParams.value = new byte[32];
+            if ((IPFS_GATEWAY + node.get(0).hash).getBytes().length > 32 )
+                System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, 32);
+            else
+                System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, (IPFS_GATEWAY + node.get(0).hash).getBytes().length);
+
             oracle.setProviderParameter(setParams);
         } else {
             System.out.println("curve is already set");
         }
 
-        // while (true) {
-        //     try { oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
-        //             DefaultBlockParameterName.LATEST).subscribe(tx -> {
-        //                 handleQuery(tx);
-        //             });
-        //     } catch (NullPointerException ne) {
+        while (true) {
+            try { 
+                oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
+                    DefaultBlockParameterName.LATEST).subscribe(tx -> {
+                        handleQuery(tx);
+                    });
+            } catch (NullPointerException ne) {
 
-        //     }
-        // }        
+            }
+        }        
     }
 
     public void getProvider() throws Exception {
@@ -176,6 +205,7 @@ public class Oracle {
         token = ZapToken.load(options);
     }
 
+    @SuppressWarnings("unchecked")
     public void handleQuery(Dispatch.IncomingEventResponse event) {
         if (Arrays.equals(event.endpoint, ((String) map.get("name")).getBytes())) {
             System.out.println("Unable to find the callback for " + event.endpoint);

@@ -15,8 +15,8 @@
         "md": "generic price oracle",
         "queryList": [
             {
-                "query": "<pair>", 
-                "params": [],
+                "query": "zap", 
+                "params": ["int"],
                 "dynamic": false,
                 "responseType": "string"
             }
