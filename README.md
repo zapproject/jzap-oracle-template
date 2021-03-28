@@ -1,1 +1,1 @@
-# jzap-oracle-template
+# Zap Oracle (Jzap api) utilizing fun translations api
