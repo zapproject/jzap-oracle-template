@@ -1,0 +1,9 @@
+*.log
+logs
+
+*.class
+
+target
+build
+
+vscode
