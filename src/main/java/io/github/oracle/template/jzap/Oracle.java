@@ -3,6 +3,7 @@ package io.github.oracle.template.jzap;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.zapproject.jzap.Dispatch;
+import io.github.zapproject.jzap.Dispatch.IncomingEventResponse;
 import io.github.zapproject.jzap.EndpointParams;
 import io.github.zapproject.jzap.InitCurve;
 import io.github.zapproject.jzap.InitProvider;
@@ -15,6 +16,7 @@ import io.github.zapproject.jzap.ZapToken;
 import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
+import io.reactivex.Flowable;
 import java.io.File;
 import java.lang.Integer;
 import java.math.BigInteger;
@@ -32,6 +34,7 @@ import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
+
 
 
 public class Oracle {
@@ -78,11 +81,14 @@ public class Oracle {
         getProvider();
         // Thread.sleep(5);
         byte[] title = oracle.getTitle();
-        if (title.length == 0) {
+        
+        if (new String(title, StandardCharsets.UTF_8).trim().isBlank()) {
             System.out.println("No provider found, Initializing provider");
             InitProvider init = new InitProvider();
             init.publicKey = BigInteger.valueOf((int)map.get("public_key"));
-            init.title = ((String) map.get("title")).getBytes();
+            title = new byte[32];
+            System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
+            init.title = title;
             TransactionReceipt res = oracle.initiateProvider(init);
         } else {
             System.out.println("Oracle exists");
@@ -97,11 +103,14 @@ public class Oracle {
         }
 
         HashMap<String, Object> endpointSchema = (HashMap<String, Object>) map.get("EndpointSchema");
-        title = new byte[32];
-        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
-        boolean curveSet = oracle.isEndpointCreated(title);
+        byte[] name = new byte[32];
+        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, name, 0, ((String)endpointSchema.get("name")).getBytes().length);
+        boolean curveSet = oracle.isEndpointCreated(name);
+        System.out.println("######### ISENDPOINNTCREATED: " + curveSet + " ### ISPROVIDERINITIALIZED: " + oracle.isProviderInitialized() +
+            " ### CURVEUNSET: " + !oracle.registry.getCurveUnset(creds.getAddress(), name).send());
 
-        if (curveSet) {
+
+        if (oracle.registry.getCurveUnset(creds.getAddress(), name).send()) {
             System.out.println("No matching Endpoint found, creating endpoint");
             
             if ((String)endpointSchema.get("broker") == "") {
@@ -112,7 +121,7 @@ public class Oracle {
             // System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
             InitCurve init = new InitCurve();
             init.broker = (String)endpointSchema.get("broker");
-            init.endpoint = title;
+            init.endpoint = name;
             init.term = new ArrayList<BigInteger>();
     
             for (Integer point : (List<Integer>) endpointSchema.get("curve")) {
@@ -121,11 +130,10 @@ public class Oracle {
             
             TransactionReceipt createEndpoint = oracle.initiateProviderCurve(init);
             System.out.println("Successfully created endpoint");
-
+            System.out.println("#### Curve: " + oracle.getCurve(name).curve.get(0));
             List<byte[]> endpointParams = new ArrayList<byte[]>();
             List queryList = (ArrayList<Object>)endpointSchema.get("queryList");
         
-            String endParams;
             for (int i=0;i<queryList.size();i++) {
                 HashMap<String, Object> query = (HashMap<String, Object>)queryList.get(i);
                 List<String> queryParams = (ArrayList<String>) query.get("params");
@@ -148,7 +156,7 @@ public class Oracle {
 
             EndpointParams params = new EndpointParams();
             // params.endpoint = ((String) map.get("name")).getBytes();
-            params.endpoint = title;
+            params.endpoint = name;
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
 
@@ -181,10 +189,11 @@ public class Oracle {
             System.out.println("curve is already set");
         }
 
+        Thread.sleep(10000);
         while (true) {
             try { 
-                oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
-                    DefaultBlockParameterName.LATEST).subscribe(tx -> {
+                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+                flow.subscribe(tx -> {
                         handleQuery(tx);
                     });
             } catch (NullPointerException ne) {
