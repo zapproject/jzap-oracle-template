@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
@@ -78,11 +79,14 @@ public class Oracle {
         getProvider();
         // Thread.sleep(5);
         byte[] title = oracle.getTitle();
-        if (title.length == 0) {
+
+        if (new String(title, StandardCharsets.UTF_8).trim().isBlank()) {
             System.out.println("No provider found, Initializing provider");
             InitProvider init = new InitProvider();
             init.publicKey = BigInteger.valueOf((int)map.get("public_key"));
-            init.title = ((String) map.get("title")).getBytes();
+            title = new byte[32];
+            System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
+            init.title = title;
             TransactionReceipt res = oracle.initiateProvider(init);
         } else {
             System.out.println("Oracle exists");
@@ -97,9 +101,9 @@ public class Oracle {
         }
 
         HashMap<String, Object> endpointSchema = (HashMap<String, Object>) map.get("EndpointSchema");
-        title = new byte[32];
-        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
-        boolean curveSet = oracle.isEndpointCreated(title);
+        byte[] name = new byte[32];
+        System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, name, 0, ((String)endpointSchema.get("name")).getBytes().length);
+        boolean curveSet = oracle.registry.getCurveUnset(creds.getAddress(), name).send();
 
         if (curveSet) {
             System.out.println("No matching Endpoint found, creating endpoint");
@@ -108,11 +112,9 @@ public class Oracle {
                 endpointSchema.put("broker", "0x0000000000000000000000000000000000000000");
             }
 
-            // title = new byte[32];
-            // System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, title, 0, ((String)endpointSchema.get("name")).getBytes().length);
             InitCurve init = new InitCurve();
             init.broker = (String)endpointSchema.get("broker");
-            init.endpoint = title;
+            init.endpoint = name;
             init.term = new ArrayList<BigInteger>();
     
             for (Integer point : (List<Integer>) endpointSchema.get("curve")) {
@@ -123,23 +125,17 @@ public class Oracle {
             System.out.println("Successfully created endpoint");
 
             List<byte[]> endpointParams = new ArrayList<byte[]>();
-            List queryList = (ArrayList<Object>)endpointSchema.get("queryList");
+            List<Object> queryList = (ArrayList<Object>)endpointSchema.get("queryList");
         
-            String endParams;
             for (int i=0;i<queryList.size();i++) {
-                HashMap<String, Object> query = (HashMap<String, Object>)queryList.get(i);
-                List<String> queryParams = (ArrayList<String>) query.get("params");
-                String params = "";
-                for (String param : queryParams) {
-                    params+=param;
-                }
+                HashMap<String, String> query = (HashMap<String, String>)queryList.get(i);
+                String params = query.get("text");
                 
-                byte[] temp = ("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes();
                 byte[] param = new byte[32];
-                if (temp.length > 32)
-                    System.arraycopy(temp, 0, param, 0, 32);
+                if (params.getBytes().length > 32)
+                    System.arraycopy(params.getBytes(), 0, param, 0, 32);
                 else
-                    System.arraycopy(temp, 0, param, 0, temp.length);
+                    System.arraycopy(params.getBytes(), 0, param, 0, params.getBytes().length);
 
                 endpointParams.add(param);
             }
@@ -148,7 +144,7 @@ public class Oracle {
 
             EndpointParams params = new EndpointParams();
             // params.endpoint = ((String) map.get("name")).getBytes();
-            params.endpoint = title;
+            params.endpoint = name;
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
 
@@ -181,23 +177,22 @@ public class Oracle {
             System.out.println("curve is already set");
         }
 
+        Thread.sleep(10000);
+        
         while (true) {
             try { 
+                System.out.println("Block Number: " + DefaultBlockParameter.valueOf(web3j.ethBlockNumber().send().toString()));
                 oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
-                    DefaultBlockParameterName.LATEST).subscribe(tx -> {
+                    DefaultBlockParameter.valueOf(web3j.ethBlockNumber().send().toString())).subscribe(tx -> {
                         handleQuery(tx);
                     });
-            } catch (NullPointerException ne) {
+            } catch (Exception ne) {
 
             }
         }        
     }
 
     public void getProvider() throws Exception {
-        // EthAccounts accounts = web3j.ethAccounts().send();
-        // assert accounts.getAccounts().size() != 0 : "Unable to find an account in the current web3j provider, check your config variables";
-        // String owner = accounts.getAccounts().get(0);
-        // Credentials creds = Credentials.create(owner);
         ContractGasProvider gasPro = new DefaultGasProvider();
         NetworkProviderOptions options = new NetworkProviderOptions(31337, web3j, creds, gasPro);
         oracle = new Provider(options);
