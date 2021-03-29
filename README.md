@@ -1,4 +1,4 @@
-# Zap Oracle (Jzap api) utilizing fun translations api
+# Fun Translation Oracle
 
 This is a Zap oracle utilizing the JZap API. The purpose of the oracle is to utilize the [Fun Translation API](https://funtranslations.com/api/) to create interesting translations.
 
