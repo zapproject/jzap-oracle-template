@@ -9,3 +9,5 @@ Add the text to be translated after the hypen "-". (e.g. "hodor-hold the door").
 Refer to hardhat/dispatchFun.js to run with [hardhat](https://github.com/zapproject/zap-hardhat/tree/feature/typescript-oracle-dispatch)
 - Copy over js file into task folder
 - Modify hardhat.config.ts to import the task
+
+** The Fun Translations API is being utilized as a public account. There is a limit of 5 API calls per hour.
