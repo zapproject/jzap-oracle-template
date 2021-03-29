@@ -11,7 +11,9 @@ public class Responder {
     public Responder() {
     }
 
-    public String getResponse(String to, String from) throws Exception {
+    public String getResponse(String query) throws Exception {
+        String to = query.substring(0, query.indexOf("-"));
+        String from = query.substring(query.indexOf("-")+1);
         String text = from.replace(" ", "%20");
         OkHttpClient httpClient = new OkHttpClient();
         RequestBody formBody = new FormBody.Builder()

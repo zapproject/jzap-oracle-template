@@ -3,6 +3,7 @@ package io.github.oracle.template.jzap;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.zapproject.jzap.Dispatch;
+import io.github.zapproject.jzap.Dispatch.IncomingEventResponse;
 import io.github.zapproject.jzap.EndpointParams;
 import io.github.zapproject.jzap.InitCurve;
 import io.github.zapproject.jzap.InitProvider;
@@ -15,6 +16,7 @@ import io.github.zapproject.jzap.ZapToken;
 import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
+import io.reactivex.Flowable;
 import java.io.File;
 import java.lang.Integer;
 import java.math.BigInteger;
@@ -27,12 +29,13 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
-import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
+
+
 
 
 public class Oracle {
@@ -105,7 +108,7 @@ public class Oracle {
         System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, name, 0, ((String)endpointSchema.get("name")).getBytes().length);
         boolean curveSet = oracle.registry.getCurveUnset(creds.getAddress(), name).send();
 
-        if (curveSet) {
+        if (oracle.registry.getCurveUnset(creds.getAddress(), name).send()) {
             System.out.println("No matching Endpoint found, creating endpoint");
             
             if ((String)endpointSchema.get("broker") == "") {
@@ -128,14 +131,19 @@ public class Oracle {
             List<Object> queryList = (ArrayList<Object>)endpointSchema.get("queryList");
         
             for (int i=0;i<queryList.size();i++) {
-                HashMap<String, String> query = (HashMap<String, String>)queryList.get(i);
-                String params = query.get("text");
+                HashMap<String, Object> query = (HashMap<String, Object>)queryList.get(i);
+                List<String> queryParams = (ArrayList<String>) query.get("params");
+                String params = "";
+                for (String param : queryParams) {
+                    params+=param;
+                }
                 
+                byte[] temp = ("Query string :" + query.get("query") + ", Query params :" + params).getBytes();
                 byte[] param = new byte[32];
-                if (params.getBytes().length > 32)
-                    System.arraycopy(params.getBytes(), 0, param, 0, 32);
+                if (temp.length > 32)
+                    System.arraycopy(temp, 0, param, 0, 32);
                 else
-                    System.arraycopy(params.getBytes(), 0, param, 0, params.getBytes().length);
+                    System.arraycopy(temp, 0, param, 0, params.getBytes().length);
 
                 endpointParams.add(param);
             }
@@ -143,7 +151,6 @@ public class Oracle {
             System.out.println("Setting endpoint params");
 
             EndpointParams params = new EndpointParams();
-            // params.endpoint = ((String) map.get("name")).getBytes();
             params.endpoint = name;
             params.endpointParams = endpointParams;
             TransactionReceipt txId = oracle.setEndpointParams(params);
@@ -177,13 +184,16 @@ public class Oracle {
             System.out.println("curve is already set");
         }
 
-        Thread.sleep(10000);
+        System.out.println("Listening for a query");
+        // Thread.sleep(10000);
         
         while (true) {
             try { 
-                System.out.println("Block Number: " + DefaultBlockParameter.valueOf(web3j.ethBlockNumber().send().toString()));
-                oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST,
-                    DefaultBlockParameter.valueOf(web3j.ethBlockNumber().send().toString())).subscribe(tx -> {
+                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+
+                flow
+                    .onErrorResumeNext(tx -> {})
+                    .subscribe(tx -> {
                         handleQuery(tx);
                     });
             } catch (Exception ne) {
@@ -201,18 +211,14 @@ public class Oracle {
     }
 
     @SuppressWarnings("unchecked")
-    public void handleQuery(Dispatch.IncomingEventResponse event) {
-        if (Arrays.equals(event.endpoint, ((String) map.get("name")).getBytes())) {
+    public void handleQuery(Dispatch.IncomingEventResponse event) throws Exception {
+        byte[] endpoint = new byte[32];
+        byte[] configEP = ((String)((HashMap<String, Object>) map.get("EndpointSchema")).get("name")).getBytes();
+        System.arraycopy(configEP, 0, endpoint, 0, configEP.length);
+
+        if (!Arrays.equals(event.endpoint, endpoint)) {
             System.out.println("Unable to find the callback for " + event.endpoint);
             return;
-        }
-
-        String endpointParams = "";
-        List<String> params = new ArrayList<String>();
-
-        for (byte[] param : event.endpointParams) {
-            params.add(new String(param, StandardCharsets.UTF_8));
-            endpointParams += params.get(params.size()-1);
         }
 
         System.out.println("Received query to " + event.endpoint + " from " + 
@@ -221,22 +227,27 @@ public class Oracle {
         System.out.println("Query ID " + event.id + "...: " + event.query + 
                 ". Parameters: " + event.endpointParams);
 
-        for (Map<String, Object> query : (List<Map<String, Object>>) map.get("queryList")) {
+        String response;
+        for (Map<String, Object> query : (List<Map<String,Object>>)((Map<String, Object>) map.get("EndpointSchema")).get("queryList")) {
             try {
-                String response = responder.getResponse(event.query, endpointParams);
+                response = responder.getResponse(event.query);
                 System.out.println("got response from getResponse method : " + response);
-
-                System.out.println("Responding to offchain subscriber");
-                ResponseArgs args = new ResponseArgs();
-                args.queryID = event.id;
-                args.responseParams = params;
-                args.dynamic = (Boolean)query.get("dynamic");
-                TransactionReceipt tx = oracle.respond(args);
-
-                System.out.println("Responded to " + event.subscriber + " in transaction " + tx.getTransactionHash());
             } catch (Exception e) {
-                throw new Error("Error Responding to query " + event.id + " : " + e.getMessage());
+                response = "Error Responding to query " + event.id + " : " + e.getMessage();
             }
+
+            List<String> res = new ArrayList<String>();
+            res.add(response);
+            System.out.println("Responding to offchain subscriber");
+            ResponseArgs args = new ResponseArgs();
+            args.queryID = event.id;
+            args.responseParams = res;
+            args.dynamic = (Boolean)query.get("dynamic");
+            TransactionReceipt tx = oracle.respond(args);
+
+            System.out.println("Responded to " + event.subscriber + " in transaction " + tx.getTransactionHash());
+
+            
         }
     }
 }
