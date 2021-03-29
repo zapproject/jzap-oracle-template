@@ -15,6 +15,7 @@ public class Responder {
     public String getResponse(String coin, String currency, Integer days) {
         MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
         String price = data.prices.get(data.prices.size()-1).get(1);
+        System.out.println("From Coin Gecko Api Price: " + price);
         return price;
     }
 
