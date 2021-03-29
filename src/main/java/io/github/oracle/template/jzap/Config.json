@@ -15,8 +15,9 @@
         "md": "generic price oracle",
         "queryList": [
             {
-                "query": "hodor", 
-                "text": "hold the door"
+                "query": "hodor-hold the door",
+                "params": ["string"],
+                "dynamic": false
             }
         ]
     }
