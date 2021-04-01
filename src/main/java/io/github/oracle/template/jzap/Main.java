@@ -32,10 +32,12 @@ public class Main {
         gasPro = new DefaultGasProvider();
 
 		Oracle oracle = new Oracle(web3j, creds, gasPro);
-		oracle.run();
+		// oracle.run();
+		oracle.start();
 		
+		Thread.sleep(5000);
 		Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
-		subscribe.run();
+		subscribe.start();
 		
 	}
 }
