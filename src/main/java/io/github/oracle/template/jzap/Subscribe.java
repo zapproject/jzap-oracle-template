@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.tx.gas.ContractGasProvider;
 
@@ -31,6 +32,7 @@ public class Subscribe extends Thread {
     HashMap<String, Object> map;
     String approveDots = "1000000000";
     byte[] endpoint = new byte[32];
+    static BigInteger lastResponse = new BigInteger("0");
 
     public Subscribe(Web3j web3j, Credentials creds, ContractGasProvider gasPro) throws Exception {
         String dir = new File("").getAbsolutePath();
@@ -113,22 +115,26 @@ public class Subscribe extends Thread {
             } catch (Exception e) {
                 System.out.println("Issue with creating a query");
             }
-            
         }
 
-        // try {
-        //     Thread.sleep(5000);
-        // } catch (InterruptedException e) {
-        //     // TODO Auto-generated catch block
-        //     e.printStackTrace();
-        // }
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
         while (true) {
-            Flowable<OffchainResult1EventResponse> flow = subscriber.dispatch.offchainResult1EventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+            try {
+                // Limit to one per sec
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            Flowable<OffchainResult1EventResponse> flow = subscriber.dispatch.offchainResult1EventFlowable(DefaultBlockParameter.valueOf(lastResponse), DefaultBlockParameterName.LATEST);
             flow
-                // .subscribeOn(Schedulers.newThread())
-                // .observeOn(Schedulers.newThread())
-                // .onErrorResumeNext(tx -> {})
-                // .retry(60)
+                .onErrorResumeNext(tx -> {})
                 .subscribe(tx -> {
                     handleReponse(tx);
                 });
@@ -141,15 +147,14 @@ public class Subscribe extends Thread {
     }
 
     public void handleReponse(OffchainResult1EventResponse event) {
-
+        lastResponse = event.log.getBlockNumber().add(BigInteger.valueOf(1));
         System.out.println("Getting response event: " + event.response1);
         
         // cancel query
-        try {
-            subscriber.cancelQuery(event.id);
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
+        // try {
+        //     subscriber.cancelQuery(event.id);
+        // } catch (Exception e) {
+        //     e.printStackTrace();
+        // }
     }
 }

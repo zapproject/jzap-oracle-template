@@ -28,11 +28,11 @@ import java.util.Map;
 import org.web3j.abi.datatypes.generated.Bytes32;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
-
 
 
 public class Oracle extends Thread {
@@ -43,7 +43,9 @@ public class Oracle extends Thread {
     public ContractGasProvider gasPro;
     public HashMap<String, Object> map;
     public Responder responder;
-    
+
+    // private static PriorityQueue<IncomingEventResponse> queue;
+    private static BigInteger lastResponded = new BigInteger("1");
     private IPFS ipfs;
     private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
 
@@ -53,20 +55,25 @@ public class Oracle extends Thread {
         map = (HashMap<String, Object>) mapper.readValue(new File(
                 dir + "/src/main/java/io/github/oracle/template/jzap/Config.json"), 
                 new TypeReference<Map<String, Object>>(){});
-        
-        // if (((String)map.get("NODE_URL")).isEmpty())
-        //     this.web3j = Web3j.build(new HttpService());
-        // else
-        //     this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
-        // this.creds = Credentials.create((String)map.get("account"));
-        // this.gasPro = new DefaultGasProvider();
+    
         this.web3j = web3j;
         this.creds = creds;
         this.gasPro = gasPro;
         this.responder = new Responder();
         this.ipfs = new IPFS("/dnsaddr/ipfs.infura.io/tcp/5001/https");
+
+        // set up Priority Queue to order from earliest queue
+        // queue = new PriorityQueue<IncomingEventResponse>(10, new Comparator<IncomingEventResponse>() {
+
+        //     @Override
+        //     public int compare(IncomingEventResponse arg0, IncomingEventResponse arg1) {
+        //         return arg0.id.intValue() < arg1.id.intValue() ? arg0.id.intValue() : arg1.id.intValue();
+        //     }
+
+        // });
     }
 
+    @SuppressWarnings("unchecked")
     public void validateConfig() {
         HashMap<String, Object> endpoint = (HashMap<String, Object>) map.get("EndpointSchema");
         assert map.get("title")!=null : "title is required to run Oracle";
@@ -95,6 +102,7 @@ public class Oracle extends Thread {
             title = new byte[32];
         }
         
+        // Load or create provider
         if (new String(title, StandardCharsets.UTF_8).trim().isBlank()) {
             System.out.println("No provider found, Initializing provider");
             InitProvider init = new InitProvider();
@@ -104,7 +112,7 @@ public class Oracle extends Thread {
             init.title = title;
 
             try {
-                TransactionReceipt res = oracle.initiateProvider(init);
+                oracle.initiateProvider(init);
             } catch (Exception e) {
                 System.out.println("Issue with initiating Provider");
             }
@@ -118,7 +126,7 @@ public class Oracle extends Thread {
                 arg.title = title;
 
                 try {
-                    TransactionReceipt ret = oracle.setTitle(arg);
+                    oracle.setTitle(arg);
                 } catch (Exception e) {
                     System.out.println("Issue with setting the provider title");
                 }
@@ -131,6 +139,8 @@ public class Oracle extends Thread {
   
         // boolean curveSet = oracle.isEndpointCreated(name);
         boolean curveNotSet = true;
+
+        // load or create endpoint Curve
         try {
             curveNotSet = oracle.registry.getCurveUnset(creds.getAddress(), name).send();
         } catch (Exception e) {
@@ -153,7 +163,7 @@ public class Oracle extends Thread {
                 init.term.add(BigInteger.valueOf(point));
             }
             try {
-                TransactionReceipt createEndpoint = oracle.initiateProviderCurve(init);
+                oracle.initiateProviderCurve(init);
             } catch (Exception e) {
                 System.out.println("Issue with initiating curve");
             }
@@ -169,7 +179,7 @@ public class Oracle extends Thread {
                 for (String param : queryParams) {
                     params+=param;
                 }
-                
+                // not necessary
                 byte[] temp = ("Query string :" + query.get("query") +", Query params :" + params + ", Response Type: " + query.get("responseType")).getBytes();
                 byte[] param = new byte[32];
                 if (temp.length > 32)
@@ -187,7 +197,7 @@ public class Oracle extends Thread {
             params.endpointParams = endpointParams;
 
             try {
-                TransactionReceipt txId = oracle.setEndpointParams(params);
+                oracle.setEndpointParams(params);
             } catch (Exception e) {
                 System.out.println("Issue with setting endpoint params");
             }
@@ -215,21 +225,22 @@ public class Oracle extends Thread {
                 System.out.println("Issue with adding JSON to IPFS");
             }
             
-
             SetProviderParams setParams = new SetProviderParams();
             setParams.key = new byte[32];
             if (((String) endpointSchema.get("name")).getBytes().length > 32)
                 System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, 32);
             else
                 System.arraycopy(((String) endpointSchema.get("name")).getBytes(), 0, setParams.key, 0, ( (String) endpointSchema.get("name")).getBytes().length);
-            setParams.value = new byte[32];
+            
+                setParams.value = new byte[32];
             if ((IPFS_GATEWAY + node.get(0).hash).getBytes().length > 32 )
                 System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, 32);
             else
                 System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, (IPFS_GATEWAY + node.get(0).hash).getBytes().length);
 
             try {
-                oracle.setProviderParameter(setParams);
+                TransactionReceipt tx = oracle.setProviderParameter(setParams);
+                lastResponded = tx.getBlockNumber().add(BigInteger.valueOf(1));
             } catch (Exception e) {
                 System.out.println("Issue with setting provider params");
             }
@@ -237,27 +248,18 @@ public class Oracle extends Thread {
         } else {
             System.out.println("curve is already set");
         }
-        System.out.println("FINDING");
-        // Thread.sleep(20000);
+
+        // Listen for queries
         while (true) {
-            // try {
-            //     Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
-            //     subscribe.run();
-            //     Thread.sleep(5000);
-            // } catch (Exception e) {
-            //     // TODO Auto-generated catch block
-            //     e.printStackTrace();
-            // }
-            
             System.out.println("Listening for query");
+
             try { 
-                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+                // limit to one per sec
+                Thread.sleep(1000);
+                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameter.valueOf(lastResponded), DefaultBlockParameterName.LATEST);
 
                 flow
-                    // .subscribeOn(Schedulers.newThread())
-                    // .observeOn(Schedulers.newThread())
-                    // .onErrorResumeNext(tx -> {})
-                    // .retry(60)
+                    .onErrorResumeNext(tx -> {})
                     .subscribe(tx -> {
                         handleQuery(tx);
                     });
@@ -278,6 +280,8 @@ public class Oracle extends Thread {
 
     @SuppressWarnings("unchecked")
     public void handleQuery(IncomingEventResponse event) {
+        lastResponded = event.log.getBlockNumber().add(BigInteger.valueOf(1));
+
         byte[] endpoint = new byte[32];
         byte[] configEP = ((String)((HashMap<String, Object>) map.get("EndpointSchema")).get("name")).getBytes();
         System.arraycopy(configEP, 0, endpoint, 0, configEP.length);
@@ -295,14 +299,7 @@ public class Oracle extends Thread {
         event.onchainSubscriber + " at address " + event.subscriber);
 
         System.out.println("Query ID " + event.id + "...: " + event.query + 
-                ". Parameters: " + event.endpointParams.toString());
-
-        // try {
-        //     Thread.sleep(5000);
-        // } catch (Exception e) {
-            
-        // }
-        
+                ". Parameters: " + event.endpointParams.toString());        
         
         for (Map<String, Object> query : (List<Map<String,Object>>)((Map<String, Object>) map.get("EndpointSchema")).get("queryList")) {
             try {
