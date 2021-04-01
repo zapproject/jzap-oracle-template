@@ -5,14 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.zapproject.jzap.ApproveType;
 import io.github.zapproject.jzap.BondType;
 import io.github.zapproject.jzap.DelegateBondType;
-import io.github.zapproject.jzap.Dispatch.OffchainResponseEventResponse;
+import io.github.zapproject.jzap.Dispatch.OffchainResult1EventResponse;
 import io.github.zapproject.jzap.NetworkProviderOptions;
 import io.github.zapproject.jzap.QueryArgs;
 import io.github.zapproject.jzap.Subscriber;
 import io.reactivex.Flowable;
 import java.io.File;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +48,14 @@ public class Subscribe extends Thread {
     @Override
     @SuppressWarnings("unchecked")
     public void run() {
+        System.out.println("Creating a query");
+        try {
+            getSubscriber();
+        } catch (Exception e) {
+            System.out.println("Issue with loading subscriber");
+        }
+        
+
         // Approve Dots
         ApproveType atype = new ApproveType();
         atype.provider = creds.getAddress();
@@ -100,6 +107,7 @@ public class Subscribe extends Thread {
             HashMap<String, Object> query = (HashMap<String, Object>)queryList.get(i);
 
             args.query = (String) query.get("query");
+            System.out.println("Sending query");
             try {
                 subscriber.queryData(args);
             } catch (Exception e) {
@@ -108,10 +116,19 @@ public class Subscribe extends Thread {
             
         }
 
+        // try {
+        //     Thread.sleep(5000);
+        // } catch (InterruptedException e) {
+        //     // TODO Auto-generated catch block
+        //     e.printStackTrace();
+        // }
         while (true) {
-            Flowable<OffchainResponseEventResponse> flow = subscriber.listenToOffchainResponse(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+            Flowable<OffchainResult1EventResponse> flow = subscriber.dispatch.offchainResult1EventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
             flow
-                .onErrorResumeNext(tx -> {})
+                // .subscribeOn(Schedulers.newThread())
+                // .observeOn(Schedulers.newThread())
+                // .onErrorResumeNext(tx -> {})
+                // .retry(60)
                 .subscribe(tx -> {
                     handleReponse(tx);
                 });
@@ -123,12 +140,16 @@ public class Subscribe extends Thread {
         subscriber = new Subscriber(options);
     }
 
-    public void handleReponse(OffchainResponseEventResponse event) {
-        String response = "";
-        for (byte[] resp : event.response) {
-            response += "\n" + new String(resp, StandardCharsets.UTF_8);
-        }
+    public void handleReponse(OffchainResult1EventResponse event) {
 
-        System.out.println("Response: " + response);
+        System.out.println("Getting response event: " + event.response1);
+        
+        // cancel query
+        try {
+            subscriber.cancelQuery(event.id);
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }

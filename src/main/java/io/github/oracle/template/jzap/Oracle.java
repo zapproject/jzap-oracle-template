@@ -34,6 +34,7 @@ import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
 
 
+
 public class Oracle extends Thread {
     public Provider oracle;
     public ZapToken token;
@@ -239,11 +240,24 @@ public class Oracle extends Thread {
         System.out.println("FINDING");
         // Thread.sleep(20000);
         while (true) {
+            // try {
+            //     Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
+            //     subscribe.run();
+            //     Thread.sleep(5000);
+            // } catch (Exception e) {
+            //     // TODO Auto-generated catch block
+            //     e.printStackTrace();
+            // }
+            
+            System.out.println("Listening for query");
             try { 
                 Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
 
                 flow
-                    .onErrorResumeNext(tx -> {})
+                    // .subscribeOn(Schedulers.newThread())
+                    // .observeOn(Schedulers.newThread())
+                    // .onErrorResumeNext(tx -> {})
+                    // .retry(60)
                     .subscribe(tx -> {
                         handleQuery(tx);
                     });
@@ -283,15 +297,24 @@ public class Oracle extends Thread {
         System.out.println("Query ID " + event.id + "...: " + event.query + 
                 ". Parameters: " + event.endpointParams.toString());
 
+        // try {
+        //     Thread.sleep(5000);
+        // } catch (Exception e) {
+            
+        // }
+        
+        
         for (Map<String, Object> query : (List<Map<String,Object>>)((Map<String, Object>) map.get("EndpointSchema")).get("queryList")) {
             try {
                 String response = responder.getResponse(event.query, "USD", 7);
                 System.out.println("got response from getResponse method : " + response);
+                List<String> param = new ArrayList<String>();
+                param.add(response);
 
                 System.out.println("Responding to offchain subscriber");
                 ResponseArgs args = new ResponseArgs();
                 args.queryID = event.id;
-                args.responseParams = params;
+                args.responseParams = param;
                 args.dynamic = (Boolean)query.get("dynamic");
                 TransactionReceipt tx = oracle.respond(args);
 
