@@ -11,6 +11,8 @@ import io.github.zapproject.jzap.QueryArgs;
 import io.github.zapproject.jzap.Subscriber;
 import io.reactivex.Flowable;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,7 +46,7 @@ public class Subscribe extends Thread {
         this.web3j = web3j;
         this.creds = creds;
         this.gasPro = gasPro;
-        System.arraycopy("Zap Price".getBytes(), 0, endpoint, 0, 9);
+        System.arraycopy("Hit Me".getBytes(), 0, endpoint, 0, 6);
     }
 
     @Override
@@ -98,7 +100,7 @@ public class Subscribe extends Thread {
         args.endpoint = endpoint;
         args.endpointParams = new ArrayList<byte[]>();
         byte[] params = new byte[32];
-        System.arraycopy("int".getBytes(), 0, params, 0, 3);
+        System.arraycopy("string".getBytes(), 0, params, 0, 6);
         args.endpointParams.add(params);
         args.provider = creds.getAddress();
 
@@ -120,18 +122,16 @@ public class Subscribe extends Thread {
         try {
             Thread.sleep(2000);
         } catch (InterruptedException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         
         while (true) {
-            try {
-                // Limit to one per sec
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+            // try {
+            //     // Limit to one per sec
+            //     Thread.sleep(1000);
+            // } catch (InterruptedException e) {
+            //     e.printStackTrace();
+            // }
             Flowable<OffchainResult1EventResponse> flow = subscriber.dispatch.offchainResult1EventFlowable(DefaultBlockParameter.valueOf(lastResponse), DefaultBlockParameterName.LATEST);
             flow
                 .onErrorResumeNext(tx -> {})
@@ -146,15 +146,11 @@ public class Subscribe extends Thread {
         subscriber = new Subscriber(options);
     }
 
-    public void handleReponse(OffchainResult1EventResponse event) {
+    public void handleReponse(OffchainResult1EventResponse event) throws IOException {
         lastResponse = event.log.getBlockNumber().add(BigInteger.valueOf(1));
-        System.out.println("Getting response event: " + event.response1);
-        
-        // cancel query
-        // try {
-        //     subscriber.cancelQuery(event.id);
-        // } catch (Exception e) {
-        //     e.printStackTrace();
-        // }
+        // System.out.println("Getting response event: " + event.response1);
+        FileWriter file = new FileWriter("response.txt");
+        file.write(event.response1);
+        file.close();
     }
 }
