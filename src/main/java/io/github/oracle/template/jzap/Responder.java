@@ -1,28 +1,50 @@
 package io.github.oracle.template.jzap;
 
-import com.litesoftwares.coingecko.CoinGeckoApiClient;
-import com.litesoftwares.coingecko.domain.Coins.MarketChart;
-import com.litesoftwares.coingecko.impl.CoinGeckoApiClientImpl;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 
 public class Responder {
-    public CoinGeckoApiClient client;
 
     public Responder() {
-        client = new CoinGeckoApiClientImpl();
     }
 
-    public String getResponse(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        System.out.println("From Coin Gecko Api Price: " + price);
-        return price;
-    }
+    public String getResponse() throws Exception {
+        String respond;
+        OkHttpClient httpClient = new OkHttpClient();
 
-    public int getResponseInt(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        int ret = Integer.parseInt(price);
-        return ret;
+        // API for App ideas
+        Request request = new Request.Builder()
+                .url("http://itsthisforthat.com/api.php?text")
+                .build();
+        
+        Response response = httpClient.newCall(request).execute();
+        respond = "App idea: " + response.body().string();
+
+        // API for advices
+        request = new Request.Builder()
+            .url("https://api.adviceslip.com/advice")
+            .build();
+        
+        response = httpClient.newCall(request).execute();
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode node = mapper.readTree(response.body().string());
+        respond += "\nAdvice: " + node.get("slip").get("advice").asText();
+
+        // API for quotes
+        request = new Request.Builder()
+            .url("http://quotes.stormconsultancy.co.uk/random.json")
+            .build();
+
+        response = httpClient.newCall(request).execute();
+
+        node = mapper.readTree(response.body().string());
+        respond += "\nQuote: " + node.get("quote") + " -" + node.get("author");
+
+        return respond;
     }
 }
