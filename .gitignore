@@ -3,7 +3,9 @@ logs
 
 *.class
 
-target
+target/*
 build
 
 vscode
+
+*.txt

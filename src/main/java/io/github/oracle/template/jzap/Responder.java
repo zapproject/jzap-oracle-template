@@ -1,10 +1,13 @@
 package io.github.oracle.template.jzap;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+
 
 public class Responder {
 
@@ -24,8 +27,10 @@ public class Responder {
                 .build();
         
         Response response = httpClient.newCall(request).execute();
-        System.out.println("#####" + response.body().string());
-        return response.body().string();
         
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode node = mapper.readTree(response.body().string());
+        
+        return node.get("contents").get("translated").asText().replace("%", " ");
     }
 }

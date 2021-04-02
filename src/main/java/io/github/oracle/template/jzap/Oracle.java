@@ -1,8 +1,9 @@
 package io.github.oracle.template.jzap;
 
+import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.zapproject.jzap.Dispatch;
 import io.github.zapproject.jzap.Dispatch.IncomingEventResponse;
 import io.github.zapproject.jzap.EndpointParams;
 import io.github.zapproject.jzap.InitCurve;
@@ -18,6 +19,7 @@ import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
 import io.reactivex.Flowable;
 import java.io.File;
+import java.io.IOException;
 import java.lang.Integer;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -29,16 +31,14 @@ import java.util.List;
 import java.util.Map;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
-import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
 
 
-
-
-public class Oracle {
+public class Oracle extends Thread {
     public Provider oracle;
     public ZapToken token;
     public Web3j web3j;
@@ -47,26 +47,25 @@ public class Oracle {
     public HashMap<String, Object> map;
     public Responder responder;
     
+    private static BigInteger startBlock = new BigInteger("1");
     private IPFS ipfs;
     private final String IPFS_GATEWAY = "https://gateway.ipfs.io/ipfs/";
 
-    public Oracle() throws Exception {
+    public Oracle(Web3j web3j, Credentials creds, ContractGasProvider gasPro) throws Exception {
         String dir = new File("").getAbsolutePath();
         ObjectMapper mapper = new ObjectMapper();
         map = (HashMap<String, Object>) mapper.readValue(new File(
                 dir + "/src/main/java/io/github/oracle/template/jzap/Config.json"), 
                 new TypeReference<Map<String, Object>>(){});
         
-        if (((String)map.get("NODE_URL")).isEmpty())
-            this.web3j = Web3j.build(new HttpService());
-        else
-            this.web3j = Web3j.build(new HttpService((String)map.get("NODE_URL")));
-        this.creds = Credentials.create((String)map.get("account"));
-        this.gasPro = new DefaultGasProvider();
+        this.web3j = web3j;
+        this.creds = creds;
+        this.gasPro = gasPro;
         this.responder = new Responder();
         this.ipfs = new IPFS("/dnsaddr/ipfs.infura.io/tcp/5001/https");
     }
 
+    @SuppressWarnings("unchecked")
     public void validateConfig() {
         HashMap<String, Object> endpoint = (HashMap<String, Object>) map.get("EndpointSchema");
         assert map.get("title")!=null : "title is required to run Oracle";
@@ -76,39 +75,54 @@ public class Oracle {
         assert endpoint.get("queryList")!=null : "Query list is recommended for date offer";
     }
 
+    @Override
     @SuppressWarnings("unchecked")
-    public void initialize() throws Exception {
+    public void run() {
         validateConfig();
-        getProvider();
+        try {
+            getProvider();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         // Thread.sleep(5);
-        byte[] title = oracle.getTitle();
+        byte[] title;
+        try {
+            title = oracle.getTitle();
 
-        if (new String(title, StandardCharsets.UTF_8).trim().isBlank()) {
-            System.out.println("No provider found, Initializing provider");
-            InitProvider init = new InitProvider();
-            init.publicKey = BigInteger.valueOf((int)map.get("public_key"));
-            title = new byte[32];
-            System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
-            init.title = title;
-            TransactionReceipt res = oracle.initiateProvider(init);
-        } else {
-            System.out.println("Oracle exists");
-            if (title != map.get("title")) {
-                System.out.println("Changing title");
-                SetProviderTitle arg = new SetProviderTitle();
+            if (new String(title, StandardCharsets.UTF_8).trim().isBlank()) {
+                System.out.println("No provider found, Initializing provider");
+                InitProvider init = new InitProvider();
+                init.publicKey = BigInteger.valueOf((int)map.get("public_key"));
                 title = new byte[32];
                 System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
-                arg.title = title;
-                TransactionReceipt ret = oracle.setTitle(arg);
+                init.title = title;
+                oracle.initiateProvider(init);
+            } else {
+                System.out.println("Oracle exists");
+                if (title != map.get("title")) {
+                    System.out.println("Changing title");
+                    SetProviderTitle arg = new SetProviderTitle();
+                    title = new byte[32];
+                    System.arraycopy(((String) map.get("title")).getBytes(), 0, title, 0, ((String) map.get("title")).getBytes().length);
+                    arg.title = title;
+                    oracle.setTitle(arg);
+                }
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         HashMap<String, Object> endpointSchema = (HashMap<String, Object>) map.get("EndpointSchema");
         byte[] name = new byte[32];
         System.arraycopy(((String)endpointSchema.get("name")).getBytes(), 0, name, 0, ((String)endpointSchema.get("name")).getBytes().length);
-        boolean curveSet = oracle.registry.getCurveUnset(creds.getAddress(), name).send();
+        boolean curveSet = true;
+        try {
+            curveSet = oracle.registry.getCurveUnset(creds.getAddress(), name).send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-        if (oracle.registry.getCurveUnset(creds.getAddress(), name).send()) {
+        if (curveSet) {
             System.out.println("No matching Endpoint found, creating endpoint");
             
             if ((String)endpointSchema.get("broker") == "") {
@@ -124,7 +138,11 @@ public class Oracle {
                 init.term.add(BigInteger.valueOf(point));
             }
             
-            TransactionReceipt createEndpoint = oracle.initiateProviderCurve(init);
+            try {
+                oracle.initiateProviderCurve(init);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             System.out.println("Successfully created endpoint");
 
             List<byte[]> endpointParams = new ArrayList<byte[]>();
@@ -153,19 +171,36 @@ public class Oracle {
             EndpointParams params = new EndpointParams();
             params.endpoint = name;
             params.endpointParams = endpointParams;
-            TransactionReceipt txId = oracle.setEndpointParams(params);
+            try {
+                oracle.setEndpointParams(params);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
             Map<String, Object> mapJson = new HashMap<>();
-            map.put("name", endpointSchema.get("name"));
-            map.put("curve", endpointSchema.get("curve"));
-            map.put("broker", endpointSchema.get("broker"));
-            map.put("params", endpointParams);
+            mapJson.put("name", endpointSchema.get("name"));
+            mapJson.put("curve", endpointSchema.get("curve"));
+            mapJson.put("broker", endpointSchema.get("broker"));
+            mapJson.put("params", endpointParams);
 
             ObjectMapper mapper = new ObjectMapper();
-            mapper.writeValue(Paths.get("endpointSchema.json").toFile(), map);
+            try {
+                mapper.writeValue(Paths.get("endpointSchema.json").toFile(), mapJson);
+            } catch (JsonGenerationException e) {
+                e.printStackTrace();
+            } catch (JsonMappingException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             System.out.println("Saving endpoint info into ipfs");
             NamedStreamable.FileWrapper file = new NamedStreamable.FileWrapper(new File("endpointSchema.json"));
-            List<MerkleNode> node = ipfs.add(file);
+            List<MerkleNode> node = new ArrayList<MerkleNode>();
+            try {
+                node = ipfs.add(file);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
             SetProviderParams setParams = new SetProviderParams();
             setParams.key = new byte[32];
@@ -179,17 +214,21 @@ public class Oracle {
             else
                 System.arraycopy((IPFS_GATEWAY + node.get(0).hash).getBytes(), 0, setParams.value, 0, (IPFS_GATEWAY + node.get(0).hash).getBytes().length);
 
-            oracle.setProviderParameter(setParams);
+            try {
+                TransactionReceipt tx = oracle.setProviderParameter(setParams);
+                startBlock = tx.getBlockNumber().add(new BigInteger("1"));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         } else {
             System.out.println("curve is already set");
         }
 
         System.out.println("Listening for a query");
-        // Thread.sleep(10000);
         
         while (true) {
             try { 
-                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameterName.EARLIEST, DefaultBlockParameterName.LATEST);
+                Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameter.valueOf(startBlock), DefaultBlockParameterName.LATEST);
 
                 flow
                     .onErrorResumeNext(tx -> {})
@@ -211,7 +250,9 @@ public class Oracle {
     }
 
     @SuppressWarnings("unchecked")
-    public void handleQuery(Dispatch.IncomingEventResponse event) throws Exception {
+    public void handleQuery(IncomingEventResponse event) throws Exception {
+        startBlock = event.log.getBlockNumber().add(new BigInteger("1"));
+
         byte[] endpoint = new byte[32];
         byte[] configEP = ((String)((HashMap<String, Object>) map.get("EndpointSchema")).get("name")).getBytes();
         System.arraycopy(configEP, 0, endpoint, 0, configEP.length);
