@@ -61,16 +61,6 @@ public class Oracle extends Thread {
         this.gasPro = gasPro;
         this.responder = new Responder();
         this.ipfs = new IPFS("/dnsaddr/ipfs.infura.io/tcp/5001/https");
-
-        // set up Priority Queue to order from earliest queue
-        // queue = new PriorityQueue<IncomingEventResponse>(10, new Comparator<IncomingEventResponse>() {
-
-        //     @Override
-        //     public int compare(IncomingEventResponse arg0, IncomingEventResponse arg1) {
-        //         return arg0.id.intValue() < arg1.id.intValue() ? arg0.id.intValue() : arg1.id.intValue();
-        //     }
-
-        // });
     }
 
     @SuppressWarnings("unchecked")
