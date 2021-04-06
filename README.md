@@ -31,3 +31,21 @@ To help users fully creating and running an off-chain Oracle with just couple co
 ## Note :
 
 - Ensure you have enough ETH in your address for responding to queries
+
+############################################
+
+# Inspire Oracle for Containers
+
+A Zap Oracle which provides a few inspirational words.
+
+Features:
+- A random app idea (http://itsthisforthat.com/)
+- A random advice (https://api.adviceslip.com/#top)
+- A random technical quote (http://quotes.stormconsultancy.co.uk/)
+
+This Oracle utilizes the JZap API https://github.com/zapproject/jzap to interact with Zap Contracts.
+Run: 
+    "mvn clean install"
+    "mvn exec:java -Dexec.mainClass="io.github.oracle.template.jzap.Main""
+
+The subscriber functionality is not ran for this version.

@@ -5,8 +5,8 @@
 	<groupId>io.github.oracle.template</groupId>
 	<artifactId>jzap</artifactId>
 	<version>0.1</version>
-	<name>CoinGecko Oracle</name>
-	<description>CoinGecko Oracle for Java ZAP API</description>
+	<name>Inspire Oracle</name>
+	<description>Inspire Oracle for Java ZAP API</description>
 	<properties>
 		<java.version>11</java.version>
 		<maven.compiler.source>1.8</maven.compiler.source>

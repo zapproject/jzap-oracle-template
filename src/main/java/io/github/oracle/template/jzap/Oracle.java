@@ -239,13 +239,19 @@ public class Oracle extends Thread {
             System.out.println("curve is already set");
         }
 
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         // Listen for queries
         while (true) {
             System.out.println("Listening for query");
 
             try { 
                 // limit to one per sec
-                Thread.sleep(1000);
+                // Thread.sleep(1000);
                 Flowable<IncomingEventResponse> flow = oracle.dispatch.incomingEventFlowable(DefaultBlockParameter.valueOf(lastResponded), DefaultBlockParameterName.LATEST);
 
                 flow
@@ -288,12 +294,12 @@ public class Oracle extends Thread {
         System.out.println("Received query to " + event.endpoint + " from " + 
         event.onchainSubscriber + " at address " + event.subscriber);
 
-        System.out.println("Query ID " + event.id + "...: " + event.query + 
+        System.out.println("Query ID " + event.id + "...: " +
                 ". Parameters: " + event.endpointParams.toString());        
         
         for (Map<String, Object> query : (List<Map<String,Object>>)((Map<String, Object>) map.get("EndpointSchema")).get("queryList")) {
             try {
-                String response = responder.getResponse(event.query, "USD", 7);
+                String response = responder.getResponse();
                 System.out.println("got response from getResponse method : " + response);
                 List<String> param = new ArrayList<String>();
                 param.add(response);

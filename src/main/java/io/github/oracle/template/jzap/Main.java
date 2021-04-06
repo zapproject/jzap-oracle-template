@@ -34,9 +34,8 @@ public class Main {
 		Oracle oracle = new Oracle(web3j, creds, gasPro);
 		oracle.start();
 		
-		Thread.sleep(2000);
-		Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
-		subscribe.start();
-		
+		// Thread.sleep(2000);
+		// Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
+		// subscribe.start();
 	}
 }
