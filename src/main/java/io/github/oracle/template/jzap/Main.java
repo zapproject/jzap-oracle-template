@@ -37,6 +37,5 @@ public class Main {
 		// Thread.sleep(2000);
 		// Subscribe subscribe = new Subscribe(web3j, creds, gasPro);
 		// subscribe.start();
-		
 	}
 }
