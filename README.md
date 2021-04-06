@@ -34,7 +34,7 @@ To help users fully creating and running an off-chain Oracle with just couple co
 
 ############################################
 
-# Inspire Oracle
+# Inspire Oracle for Containers
 
 A Zap Oracle which provides a few inspirational words.
 
@@ -44,5 +44,8 @@ Features:
 - A random technical quote (http://quotes.stormconsultancy.co.uk/)
 
 This Oracle utilizes the JZap API https://github.com/zapproject/jzap to interact with Zap Contracts.
+Run: 
+    "mvn clean install"
+    "mvn exec:java -Dexec.mainClass="io.github.oracle.template.jzap.Main""
 
-Simply run src/main/java/io/github/oracle/template/Main.java to execute.
+The subscriber functionality is not ran for this version.
