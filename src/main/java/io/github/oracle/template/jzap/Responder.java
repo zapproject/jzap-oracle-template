@@ -1,28 +1,41 @@
 package io.github.oracle.template.jzap;
 
-import com.litesoftwares.coingecko.CoinGeckoApiClient;
-import com.litesoftwares.coingecko.domain.Coins.MarketChart;
-import com.litesoftwares.coingecko.impl.CoinGeckoApiClientImpl;
+import io.github.zapproject.jzap.wrappers.Registry;
+import java.math.BigInteger;
+import java.util.List;
 
 
 public class Responder {
-    public CoinGeckoApiClient client;
 
     public Responder() {
-        client = new CoinGeckoApiClientImpl();
     }
 
-    public String getResponse(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        System.out.println("From Coin Gecko Api Price: " + price);
-        return price;
+    public String getResponse(Registry registry, int days, int hours) {
+        return "";
     }
 
-    public int getResponseInt(String coin, String currency, Integer days) {
-        MarketChart data = client.getCoinMarketChartById(coin.toLowerCase(), currency, days);
-        String price = data.prices.get(data.prices.size()-1).get(1);
-        int ret = Integer.parseInt(price);
-        return ret;
+    public AOracle getHighest(Registry registry) throws Exception {
+        Curve curves;
+        BigInteger high = BigInteger.valueOf(0);
+        List<String> oracleAddresses = (List<String>) registry.getAllOracles().send();
+        
+        for (String address : oracleAddresses) {
+            List<byte[]> endpoints = registry.getProviderEndpoints(address).send();
+            
+            for (byte[] endpoint : endpoints) {
+                List<BigInteger> curve = registry.getProviderCurve(address, endpoint).send();
+                curves = new Curve(curve);
+            }
+        }
+
+
+        return new AOracle();
     }
+}
+
+class AOracle {
+    String address;
+    String endpoint;
+    List<BigInteger> curve;
+    BigInteger yeild;
 }
