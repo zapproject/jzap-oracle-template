@@ -29,6 +29,7 @@ public class Subscribe extends Thread {
     Subscriber subscriber;
     Web3j web3j;
     Credentials creds;
+    Credentials oracle;
     ContractGasProvider gasPro;
 
     HashMap<String, Object> map;
@@ -44,7 +45,8 @@ public class Subscribe extends Thread {
                 new TypeReference<Map<String, Object>>(){});
         
         this.web3j = web3j;
-        this.creds = creds;
+        this.oracle = creds;
+        this.creds = Credentials.create("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a");
         this.gasPro = gasPro;
         System.arraycopy("Hit Me".getBytes(), 0, endpoint, 0, 6);
     }
@@ -62,7 +64,7 @@ public class Subscribe extends Thread {
 
         // Approve Dots
         ApproveType atype = new ApproveType();
-        atype.provider = creds.getAddress();
+        atype.provider = oracle.getAddress();
         atype.zapNum = new BigInteger(approveDots);
         try {
             subscriber.approveToBond(atype);
@@ -75,7 +77,7 @@ public class Subscribe extends Thread {
         DelegateBondType dtype = new DelegateBondType();
         dtype.dots = new BigInteger("100");
         dtype.endpoint = endpoint;
-        dtype.provider = creds.getAddress();
+        dtype.provider = oracle.getAddress();
         dtype.subscriber = subscriber.bondage.address;
         try {
             subscriber.delegateBond(dtype);
@@ -87,7 +89,7 @@ public class Subscribe extends Thread {
         BondType btype = new BondType();
         btype.dots = new BigInteger("100");
         btype.endpoint = endpoint;
-        btype.provider = creds.getAddress();
+        btype.provider = oracle.getAddress();
         btype.subscriber = subscriber.bondage.address;
         try {
             subscriber.bond(btype);
@@ -102,7 +104,7 @@ public class Subscribe extends Thread {
         byte[] params = new byte[32];
         System.arraycopy("string".getBytes(), 0, params, 0, 6);
         args.endpointParams.add(params);
-        args.provider = creds.getAddress();
+        args.provider = oracle.getAddress();
 
         HashMap<String, Object> schema = (HashMap<String, Object>) map.get("EndpointSchema");
         List<Object> queryList = (ArrayList<Object>)schema.get("queryList");
@@ -126,12 +128,6 @@ public class Subscribe extends Thread {
         }
         
         while (true) {
-            // try {
-            //     // Limit to one per sec
-            //     Thread.sleep(1000);
-            // } catch (InterruptedException e) {
-            //     e.printStackTrace();
-            // }
             Flowable<OffchainResult1EventResponse> flow = subscriber.dispatch.offchainResult1EventFlowable(DefaultBlockParameter.valueOf(lastResponse), DefaultBlockParameterName.LATEST);
             flow
                 .onErrorResumeNext(tx -> {})
